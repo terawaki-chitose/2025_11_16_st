@@ -6,27 +6,21 @@ REWARD_DAYS = [3, 7, 14, 21, 25]
 START_MASU = 1
 GOAL_MASU = MAX_MASU
 
-# --- 初期化（アプリ起動時に一度だけ動く） ---
-# st.session_state に必要な変数が存在するかチェックし、なければ初期値を設定
-if "current_day" not in st.session_state:
-    st.session_state.current_day = 1  # 現在の日数（マス番号）
-if "history" not in st.session_state:
-    # 履歴: {日数: "達成" / "未達成" / "ゴール済"}
-    st.session_state.history = {}
-if "theme" not in st.session_state:
-    st.session_state.theme = "読書を25日継続する！"
-if "rewards" not in st.session_state:
-    # ご褒美リスト: {日数: {name: "ご褒美名", checked: False}}
-    st.session_state.rewards = {day: {"name": "", "checked": False} for day in REWARD_DAYS}
-if "consecutive_success" not in st.session_state:
-    st.session_state.consecutive_success = 0  # 連続達成日数
-if "animation_type" not in st.session_state:
-    st.session_state.animation_type = None  # None, "balloons", or "goal_celebration"
-if "reward_checked_animation" not in st.session_state:  # NEW: チェックボックス用アニメーションフラグ
-    st.session_state.reward_checked_animation = False
-
 
 # --- 処理関数 ---
+def reset_game():
+    """ゲームの状態を初期値にリセットする (テーマは除く)"""
+    st.session_state.current_day = 1
+    st.session_state.history = {}
+    st.session_state.rewards = {day: {"name": "", "checked": False} for day in REWARD_DAYS}
+    st.session_state.consecutive_success = 0
+    st.session_state.animation_type = None
+    st.session_state.reward_checked_animation = False
+    # st.toast は st.rerun の後に表示されるため、次の行で実行
+
+    # リセット後に画面を再描画
+    st.rerun()
+
 
 def record_success():
     """達成ボタンが押されたときの処理"""
@@ -49,22 +43,26 @@ def record_success():
             # ご褒美マス達成 (風船のみ)
             st.session_state.animation_type = "balloons"
             st.toast(f"🎁 ご褒美マス達成！おめでとうございます！", icon="✨")
-        elif st.session_state.consecutive_success % 3 == 0:
+        elif st.session_state.consecutive_success > 0 and st.session_state.consecutive_success % 3 == 0:  # 連続達成日数が0でないことを確認
             # 連続達成メッセージ
             st.toast(f"🎉 3日連続達成！偉い！ {st.session_state.consecutive_success}日連続記録更新中！", icon="🥳")
         else:
             st.toast("達成を記録しました！次の日も頑張りましょう！", icon="💪")
 
-        # 次のマスへ進む (ゴール後は進まない)
-        if st.session_state.current_day < GOAL_MASU:
+        # 次のマスへ進む (Day 25達成時はDay 26に進み、ボタンを無効化する)
+        if st.session_state.current_day <= GOAL_MASU:  # NEW: 25日目もインクリメントする
             st.session_state.current_day += 1
 
 
 def record_failure():
     """未達成ボタンが押されたときの処理"""
-    st.session_state.history[st.session_state.current_day] = "未達成"
-    st.session_state.consecutive_success = 0  # 連続達成日数をリセット
-    st.toast("未達成を記録しました。また明日から気持ちを切り替えて！", icon="😭")
+    if st.session_state.current_day <= GOAL_MASU:  # ゴール後は未達成も記録しない
+        st.session_state.history[st.session_state.current_day] = "未達成"
+        st.session_state.consecutive_success = 0  # 連続達成日数をリセット
+        st.toast("未達成を記録しました。また明日から気持ちを切り替えて！", icon="😭")
+
+        # 未達成を記録したら画面を再描画して連続達成日数のリセットを表示に反映
+        st.rerun()
 
 
 def update_reward_check(day):
@@ -73,39 +71,66 @@ def update_reward_check(day):
     # チェックボックスの状態をセッションに反映
     st.session_state.rewards[day]["checked"] = is_checked
 
-    # NEW: チェックが入ったら（ご褒美をGETしたら）アニメーションフラグを立てる
+    # チェックが入ったら（ご褒美をGETしたら）アニメーションフラグを立てる
     if is_checked:
         st.session_state.reward_checked_animation = True
 
+
+# --- 初期化（アプリ起動時に一度だけ動く） ---
+# st.session_state に必要な変数が存在するかチェックし、なければ初期値を設定
+if "current_day" not in st.session_state:
+    st.session_state.current_day = 1
+# ... (他の初期化ロジックは省略せずにコードに残っています) ...
+if "history" not in st.session_state:
+    # 履歴: {日数: "達成" / "未達成"}
+    st.session_state.history = {}
+if "theme" not in st.session_state:
+    st.session_state.theme = "読書を25日継続する！"
+if "rewards" not in st.session_state:
+    # ご褒美リスト: {日数: {name: "ご褒美名", checked: False}}
+    st.session_state.rewards = {day: {"name": "", "checked": False} for day in REWARD_DAYS}
+if "consecutive_success" not in st.session_state:
+    st.session_state.consecutive_success = 0
+if "animation_type" not in st.session_state:
+    st.session_state.animation_type = None
+if "reward_checked_animation" not in st.session_state:
+    st.session_state.reward_checked_animation = False
 
 # --- UIのメインレイアウト ---
 st.set_page_config(page_title="3日坊主すごろく", page_icon="🌟", layout="wide")
 
 st.title("三日坊主防止すごろく（25マス）🌟")
 
-# テーマ設定エリア
-st.session_state.theme = st.text_input(
-    "チャレンジテーマ（25日間の目標）",
-    value=st.session_state.theme,
-    placeholder="例: 毎日10ページ本を読む！"
-)
+# テーマ設定とリセットボタンのエリア
+col_theme, col_reset = st.columns([4, 1])
+
+with col_theme:
+    st.session_state.theme = st.text_input(
+        "チャレンジテーマ（25日間の目標）",
+        value=st.session_state.theme,
+        placeholder="例: 毎日10ページ本を読む！"
+    )
+
+# with col_reset:
+#     # リセットボタン (on_clickでreset_gameを呼び出す)
+#     st.button("🔄 チャレンジをリセット", on_click=reset_game, use_container_width=True)
 
 st.subheader("今日の達成")
 
 # 達成ボタンと未達成ボタン
 col_success, col_fail, col_status = st.columns([1.5, 1.5, 3])
 
-if col_success.button("達成した！🎉", use_container_width=True, type="primary",
-                      disabled=st.session_state.current_day > GOAL_MASU):
+# ゴール達成後はボタンを無効化 (current_day > GOAL_MASU で無効)
+is_goal_achieved = st.session_state.current_day > GOAL_MASU
+
+if col_success.button("達成した！🎉", use_container_width=True, type="primary", disabled=is_goal_achieved):
     record_success()
     # 処理後に再描画
     st.rerun()
 
-if col_fail.button("今日はできなかった...😢", use_container_width=True,
-                   disabled=st.session_state.current_day > GOAL_MASU):
+if col_fail.button("今日はできなかった...😢", use_container_width=True, disabled=is_goal_achieved):
+    # record_failure()内でst.rerun()を呼ぶのでここでは処理のみ実行
     record_failure()
-    # 処理後に再描画
-    st.rerun()
 
 # --- アニメーションの実行（成功時の一度だけ） ---
 # 1. 達成ボタンによるアニメーション
@@ -118,14 +143,14 @@ elif st.session_state.animation_type == "goal_celebration":
     st.snow()
     st.session_state.animation_type = None
 
-# 2. NEW: ご褒美チェックボックスによるアニメーション
+# 2. ご褒美チェックボックスによるアニメーション
 if st.session_state.reward_checked_animation:
     st.balloons()
     st.session_state.reward_checked_animation = False  # 実行後にリセット
 
 # 現在のステータス表示
-if st.session_state.current_day > GOAL_MASU:
-    # NEW: ゴール達成時のメッセージを修正
+if is_goal_achieved:
+    # ゴール達成時のメッセージを修正
     col_status.markdown("## 🎉 おめでとう！GOAL達成！✨")
 else:
     col_status.markdown(
